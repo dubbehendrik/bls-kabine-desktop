@@ -1,10 +1,16 @@
 name: Windows-Installer
-# Tag vX.Y.Z  -> baut den Installer und veröffentlicht ihn im öffentlichen Repo bls-kabine-downloads.
-# Manuell     -> baut nur einen Testinstaller (Artefakt im Actions-Lauf), nichts wird veröffentlicht.
+# Veröffentlichen: Actions -> "Windows-Installer" -> "Run workflow" -> Häkchen "Veröffentlichen" (Branch main),
+#                 oder Tag vX.Y.Z pushen.
+# Ohne Häkchen:   nur Testinstaller als Artefakt im Actions-Lauf, nichts wird veröffentlicht.
 on:
   push:
     tags: ['v*.*.*']
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Veröffentlichen (Version aus package.json im öffentlichen Downloads-Repo)'
+        type: boolean
+        default: false
 permissions:
   contents: read
 env:
@@ -64,7 +70,7 @@ jobs:
 
   publish:
     needs: build
-    if: github.ref_type == 'tag'
+    if: github.ref_type == 'tag' || (inputs.publish && github.ref == 'refs/heads/main')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -78,7 +84,7 @@ jobs:
           VERSION: ${{ needs.build.outputs.version }}
         run: |
           if [ -z "$GH_TOKEN" ]; then
-            echo "::warning::Secret DOWNLOADS_TOKEN fehlt – Installer liegt nur als Artefakt in diesem Lauf."; exit 0
+            echo "::error::Secret DOWNLOADS_TOKEN fehlt – Installer liegt nur als Artefakt in diesem Lauf."; exit 1
           fi
           if gh release view "v$VERSION" -R "$DOWNLOAD_REPO" >/dev/null 2>&1; then
             echo "::error::Release v$VERSION existiert bereits. Bestehende Versionen werden nicht überschrieben."; exit 1
@@ -86,5 +92,5 @@ jobs:
           # Abschnitt "## X.Y.Z" aus CHANGELOG.md als Release-Text
           awk -v v="## $VERSION" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md > notes.md
           [ -s notes.md ] || echo "Version $VERSION" > notes.md
-          gh release create "v$VERSION" -R "$DOWNLOAD_REPO" --title "BLS-Kabine Lehrtool $VERSION" --notes-file notes.md \
+          gh release create "v$VERSION" -R "$DOWNLOAD_REPO" --target main --title "BLS-Kabine Lehrtool $VERSION" --notes-file notes.md \
             "out/$SETUP_NAME" "out/$SETUP_NAME.sha256" out/latest.json

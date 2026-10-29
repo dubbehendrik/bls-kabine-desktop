@@ -34,8 +34,9 @@ npm run dist    # Installer nach release/ (unter Windows)
 ## Neue Version veröffentlichen
 
 1. `version` in `package.json` erhöhen (z. B. `0.1.1`) und Abschnitt `## 0.1.1` in `CHANGELOG.md` ergänzen.
-2. Commit auf `main`, dann Tag `v0.1.1` setzen und pushen.
-3. GitHub Actions baut auf Windows, prüft und veröffentlicht `BLS-Kabine-Lehrtool-Setup.exe`, `.sha256` und `latest.json` im Downloads-Repo.
+2. Commit auf `main` pushen.
+3. Auf GitHub: **Actions → Windows-Installer → Run workflow**, Branch `main`, Häkchen **Veröffentlichen** setzen → **Run workflow**. (Alternativ Tag `v0.1.1` pushen.)
+   GitHub Actions baut auf Windows, prüft und veröffentlicht `BLS-Kabine-Lehrtool-Setup.exe`, `.sha256` und `latest.json` im Downloads-Repo.
 4. Installierte Programme finden das Update über „Nach Updates suchen“ bzw. beim Start.
 
 Voraussetzung für Schritt 3: Secret `DOWNLOADS_TOKEN` (Fine-grained Token mit „Contents: Read and write“ nur für `bls-kabine-downloads`). Ohne Secret liegt der Installer nur als Artefakt im Actions-Lauf.
