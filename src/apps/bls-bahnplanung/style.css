@@ -6,3 +6,4 @@
 
 /* Exaggerated 3D coating (desktop 0.1.1) */
 .bls-exaggeration{display:flex;flex-wrap:wrap;align-items:center;gap:8px}.bls-exaggeration input[type=range]{width:180px}.bls-axis-label{font-size:11px;white-space:nowrap}.bls-scene-note{margin:8px 0 0;font-size:.85rem;color:#4c6271}
+.bls-cut-label{color:#4a1f80;font-weight:600;white-space:nowrap;font-size:12px}

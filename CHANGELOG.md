@@ -1,5 +1,9 @@
 # Änderungen
 
+## 0.1.2
+
+- Kabinenansicht 3D: Schnittebene wird wie in der 3D-Profilansicht angezeigt (violette Ebene, Lagebeschriftung), mit Profilkurve auf der überhöhten Schichtoberfläche. Gesteuert über die bestehenden Schnitt-Einstellungen; dreht sich mit dem Blech.
+
 ## 0.1.1
 
 - Kabinenansicht 3D: Schichtdicke kann überhöht als Körper dargestellt werden (Regler „Überhöhung“, 0–100 mm Höhe am Skalenmaximum, Standard 40 mm; 0 = flach wie bisher).

@@ -5,8 +5,8 @@ import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRe
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { brush, colorFraction, exaggeratedHeight, lamps, pistonTravel, type Params, type Pose } from './model';
 const fmtUm = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: n < 10 ? 1 : 0 });
-export default function Scene({ p, pose, z, nx, ny, max, log, cabin, transparent, filter, used, time, duration, playing, dry = true }: {
-  p: Params; pose: Pose; z: Float32Array; nx: number; ny: number; max: number; log: boolean; dry?: boolean;
+export default function Scene({ p, pose, z, nx, ny, max, log, cabin, transparent, filter, used, time, duration, playing, dry = true, axis = 'x', fraction = .5, showCut = false }: {
+  p: Params; pose: Pose; z: Float32Array; nx: number; ny: number; max: number; log: boolean; dry?: boolean; axis?: 'x' | 'y'; fraction?: number; showCut?: boolean;
   cabin: boolean; transparent: boolean; filter: boolean; used: number; time: number; duration: number; playing: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null), rendererRef = useRef<T.WebGLRenderer | SVGRenderer | null>(null);
@@ -185,6 +185,31 @@ export default function Scene({ p, pose, z, nx, ny, max, log, cabin, transparent
       }
       group.add(new T.LineSegments(new T.BufferGeometry().setFromPoints(axis), new T.LineBasicMaterial({ color: 0x173748 })));
     }
+    if (showCut) {
+      // Same grid row/column as cutValues() and the 2D views; sheet-local, so it rotates with the sheet.
+      const along = axis === 'x', count = along ? ny : nx, index = Math.max(0, Math.min(count - 1, Math.round(fraction * (count - 1))));
+      const xAt = (i: number) => -p.width / 2 + i * p.width / (nx - 1), zAt = (j: number) => p.height / 2 - j * p.height / (ny - 1);
+      const top = exaggeration > 0 ? exaggeration * 1.05 + 2 : 15;
+      const a = along ? new T.Vector3(xAt(0), 2, zAt(index)) : new T.Vector3(xAt(index), 2, zAt(0));
+      const b = along ? new T.Vector3(xAt(nx - 1), 2, zAt(index)) : new T.Vector3(xAt(index), 2, zAt(ny - 1));
+      const corners = [a, b, b.clone().setY(top), a.clone().setY(top)];
+      const planeGeometry = new T.BufferGeometry().setFromPoints(corners); planeGeometry.setIndex([0, 1, 2, 0, 2, 3]);
+      const plane = new T.Mesh(planeGeometry, new T.MeshBasicMaterial({ color: 0x673b9e, transparent: true, opacity: .14, side: T.DoubleSide, depthWrite: false }));
+      plane.renderOrder = 15; group.add(plane);
+      const border = new T.LineLoop(new T.BufferGeometry().setFromPoints(corners), new T.LineBasicMaterial({ color: 0x673b9e, depthTest: false, depthWrite: false }));
+      border.renderOrder = 21; group.add(border);
+      if (exaggeration > 0) {
+        // Profile follows the exaggerated surface exactly (same vertices as the layer mesh).
+        const points = along
+          ? Array.from({ length: nx }, (_, i) => new T.Vector3(xAt(i), 2.5 + exaggeratedHeight(z[index * nx + i], max, exaggeration), zAt(index)))
+          : Array.from({ length: ny }, (_, j) => new T.Vector3(xAt(index), 2.5 + exaggeratedHeight(z[j * nx + index], max, exaggeration), zAt(j)));
+        const curve = new T.Line(new T.BufferGeometry().setFromPoints(points), new T.LineBasicMaterial({ color: 0x4a1f80, depthTest: false, depthWrite: false }));
+        curve.renderOrder = 22; group.add(curve);
+      }
+      const fixed = along ? (fraction - .5) * p.height : (fraction - .5) * p.width;
+      const div = document.createElement('div'); div.className = 'bls-model-label bls-cut-label'; div.textContent = `Schnitt ${along ? 'y' : 'x'} = ${fixed.toLocaleString('de-DE', { maximumFractionDigits: 1 })} mm`;
+      const tag = new T.Object3D(); tag.position.copy(a.clone().setY(top + 6)); tag.add(new CSS2DObject(div)); group.add(tag);
+    }
     for (const [direction, name, color] of [[new T.Vector3(1,0,0), 'X', 0xb62332], [new T.Vector3(0,0,-1), 'Y', 0x175fa7]] as const) {
       const origin = new T.Vector3(-pose.x, 48, 0); scene.add(new T.ArrowHelper(direction, origin, 90, color, 12, 7));
       const tip=origin.clone().addScaledVector(direction,105); label(name,tip.x,tip.y,tip.z);
@@ -208,10 +233,10 @@ export default function Scene({ p, pose, z, nx, ny, max, log, cabin, transparent
       saved.current = { focus, position: camera.position.clone(), target: controls.target.clone() }; cancelAnimationFrame(id); ro.disconnect(); labelRenderer.domElement.remove();
       scene.traverse(o => { if ((o instanceof T.Mesh || o instanceof T.Line)) { o.geometry.dispose(); const m = o.material; Array.isArray(m) ? m.forEach(x => x.dispose()) : m.dispose(); } });
     };
-  }, [p, pose, z, nx, ny, max, log, cabin, transparent, filter, used, time, duration, playing, focus, exaggeration]);
+  }, [p, pose, z, nx, ny, max, log, cabin, transparent, filter, used, time, duration, playing, focus, exaggeration, axis, fraction, showCut]);
   const layerName = dry ? 'Trockenschicht' : 'Nassschicht';
   return <div><div className="toolbar">{[['overall', 'Gesamtansicht'], ['head', 'Spritzkopf & Hörner'], ['panel', 'Bedienpult']].map(([v, l]) => <button className={focus === v ? 'active' : ''} key={v} onClick={() => { saved.current = null; setFocus(v); }}>{l}</button>)}
       <label className="toggle bls-exaggeration">Überhöhung · Höhe bei Skalenmaximum: {exaggeration === 0 ? 'aus (flach)' : `${exaggeration} mm`}<input type="range" min={0} max={100} step={5} value={exaggeration} aria-label="Darstellungshöhe der Schicht am Skalenmaximum in mm" onChange={e => setExaggeration(Number(e.target.value))} /></label></div>
     <div className="bls-scene" ref={host} aria-label="Drehbares Kabinenmodell mit verbundener Aufhängung, Spritze, Luftkappenhörnern und beschrifteten Leuchten" />
-    {exaggeration > 0 && max > .01 && <p className="bls-scene-note">{layerName} überhöht: {fmtUm(max)} µm (Skalenmaximum) entsprechen {exaggeration} mm Darstellungshöhe. Die Höhe ist linear in µm, auch bei logarithmischer Farbskala; Farbe und µm-Achse zeigen die Modellwerte. Der Maßstab bleibt über die Zeit konstant, die Schicht wächst also sichtbar mit.</p>}</div>;
+    {exaggeration > 0 && max > .01 && <p className="bls-scene-note">{layerName} überhöht: {fmtUm(max)} µm (Skalenmaximum) entsprechen {exaggeration} mm Darstellungshöhe. Die Höhe ist linear in µm, auch bei logarithmischer Farbskala; Farbe und µm-Achse zeigen die Modellwerte. Der Maßstab bleibt über die Zeit konstant, die Schicht wächst also sichtbar mit.{showCut && ' Violett: Schnittebene mit Profil auf der Schichtoberfläche, gleiche Lage wie in Karte und 3D-Profil.'}</p>}</div>;
 }

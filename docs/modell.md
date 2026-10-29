@@ -29,3 +29,7 @@ Automated tests cover Gaussian normalization, round/elliptical symmetry, orienta
 ## Desktop 0.1.1 – überhöhte 3D-Schicht
 
 Kabinenansicht: Die Schicht kann wie in der Roboter-Bahnplanung überhöht als geschlossener Körper gezeigt werden. Darstellungshöhe = Schichtdicke / Skalenmaximum × eingestellte Höhe (0–100 mm, Standard 40 mm), linear auch bei logarithmischer Farbskala. Skalenmaximum ist das Maximum des Endzustands, daher bleibt der Maßstab über die Animation konstant. Reine Darstellung, keine Modelländerung. Gitterwerte (Zellmittelpunkte) werden wie bisher auf die Plattenecken gelegt.
+
+## Desktop 0.1.2 – Schnittebene in der Kabinenansicht
+
+Die Schnittebene nutzt dieselbe Gitterzeile bzw. -spalte wie `cutValues()` und die 2D-Ansichten und ist blechfest (dreht beim Kreuzgang mit). Die Profilkurve liegt auf den Stützpunkten der überhöhten Schicht; bei Überhöhung 0 wird nur die Ebenenlage gezeigt.
