@@ -3,15 +3,18 @@ import * as T from 'three';
 import { SVGRenderer } from 'three/examples/jsm/renderers/SVGRenderer.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { brush, colorFraction, lamps, pistonTravel, type Params, type Pose } from './model';
-export default function Scene({ p, pose, z, nx, ny, max, log, cabin, transparent, filter, used, time, duration, playing }: {
-  p: Params; pose: Pose; z: Float32Array; nx: number; ny: number; max: number; log: boolean;
+import { brush, colorFraction, exaggeratedHeight, lamps, pistonTravel, type Params, type Pose } from './model';
+const fmtUm = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: n < 10 ? 1 : 0 });
+export default function Scene({ p, pose, z, nx, ny, max, log, cabin, transparent, filter, used, time, duration, playing, dry = true }: {
+  p: Params; pose: Pose; z: Float32Array; nx: number; ny: number; max: number; log: boolean; dry?: boolean;
   cabin: boolean; transparent: boolean; filter: boolean; used: number; time: number; duration: number; playing: boolean;
 }) {
   const host = useRef<HTMLDivElement>(null), rendererRef = useRef<T.WebGLRenderer | SVGRenderer | null>(null);
   const saved = useRef<{ focus: string; position: T.Vector3; target: T.Vector3 } | null>(null);
   const interaction = useRef<{ camera: T.PerspectiveCamera; controls: OrbitControls } | null>(null);
   const [focus, setFocus] = useState('overall');
+  // Display height of the colour-scale maximum in mm; 0 keeps the flat coloured coating.
+  const [exaggeration, setExaggeration] = useState(40);
   useEffect(() => () => { interaction.current?.controls.dispose(); interaction.current = null; if (rendererRef.current instanceof T.WebGLRenderer) rendererRef.current.dispose(); rendererRef.current = null; }, []);
   useEffect(() => {
     if (!host.current) return;
@@ -143,18 +146,45 @@ export default function Scene({ p, pose, z, nx, ny, max, log, cabin, transparent
       const b = brush(p), spray = new T.Mesh(new T.ConeGeometry(1, p.distance, 36, 1, true), new T.MeshBasicMaterial({ color: 0x2ad89d, transparent: true, opacity: .28, side: T.DoubleSide, depthWrite: false }));
       spray.scale.set(b.sx * 2.5, 1, b.sy * 2.5); spray.rotation.y = p.orientation * Math.PI / 180; spray.position.set(0, outlet - 12 - p.distance / 2, (-pose.y)); scene.add(spray);
       const points = Array.from({length: 81}, (_, i) => { const a=i/80*Math.PI*2, u=b.sx*2.5*Math.cos(a), v=b.sy*2.5*Math.sin(a), t=p.orientation*Math.PI/180; return new T.Vector3(u*Math.cos(t)-v*Math.sin(t), 43, (-pose.y)-u*Math.sin(t)-v*Math.cos(t)); });
-      scene.add(new T.Line(new T.BufferGeometry().setFromPoints(points), new T.LineBasicMaterial({color: 0x008b58})));
+      const footprint = new T.Line(new T.BufferGeometry().setFromPoints(points), new T.LineBasicMaterial({ color: 0x008b58, depthTest: false, depthWrite: false }));
+      footprint.renderOrder = 20; scene.add(footprint); // stays visible above an exaggerated layer
     }
     const group = new T.Group(); group.position.set(-pose.x, 40, 0); group.rotation.y = pose.angle; scene.add(group);
     box(p.width, 2, p.height, 0, 0, 0, 0xc2cbd1, 1, group);
     const geometry = new T.PlaneGeometry(p.width, p.height, nx - 1, ny - 1); geometry.rotateX(Math.PI / 2);
     const colors = new Float32Array(nx * ny * 3);
+    // Coating surface sits 2 mm above the sheet centre plane; exaggerated height is linear in µm, scale fixed over time.
     for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-      const k = j * nx + i, value = z[k]; geometry.attributes.position.setY(k, 2);
+      const k = j * nx + i, value = z[k]; geometry.attributes.position.setY(k, 2 + exaggeratedHeight(value, max, exaggeration));
       const col = value <= 1e-9 ? new T.Color('#dbe3e8') : new T.Color().setHSL((235 - 235 * colorFraction(value, max, log)) / 360, .83, .48);
       colors.set([col.r, col.g, col.b], k * 3);
     }
     geometry.setAttribute('color', new T.BufferAttribute(colors, 3)); geometry.computeVertexNormals(); group.add(new T.Mesh(geometry, new T.MeshStandardMaterial({ vertexColors: true, side: T.DoubleSide, roughness: .75 })));
+    if (exaggeration > 0) {
+      // Closed body: side walls from the sheet surface up to the layer edge, slightly darker.
+      const boundary: number[] = [];
+      for (let i = 0; i < nx; i++) boundary.push(i);
+      for (let j = 1; j < ny; j++) boundary.push(j * nx + nx - 1);
+      for (let i = nx - 2; i >= 0; i--) boundary.push((ny - 1) * nx + i);
+      for (let j = ny - 2; j > 0; j--) boundary.push(j * nx);
+      const pos = geometry.attributes.position, wall: number[] = [], wallColors: number[] = [];
+      boundary.forEach((a, n) => {
+        const b = boundary[(n + 1) % boundary.length];
+        const top = (k: number) => [pos.getX(k), pos.getY(k), pos.getZ(k)], base = (k: number) => [pos.getX(k), 2, pos.getZ(k)];
+        wall.push(...top(a), ...base(a), ...top(b), ...top(b), ...base(a), ...base(b));
+        for (const k of [a, a, b, b, a, b]) wallColors.push(colors[k * 3] * .78, colors[k * 3 + 1] * .78, colors[k * 3 + 2] * .78);
+      });
+      const sides = new T.BufferGeometry(); sides.setAttribute('position', new T.Float32BufferAttribute(wall, 3)); sides.setAttribute('color', new T.Float32BufferAttribute(wallColors, 3)); sides.computeVertexNormals();
+      group.add(new T.Mesh(sides, new T.MeshStandardMaterial({ vertexColors: true, side: T.DoubleSide, roughness: .8 })));
+      // µm axis at the sheet corner, rotating with the sheet; ticks at 0, ½ and full scale.
+      const ax = -p.width / 2 - 14, az = p.height / 2 + 14, axis: T.Vector3[] = [new T.Vector3(ax, 2, az), new T.Vector3(ax, 2 + exaggeration, az)];
+      for (const f of [0, .5, 1]) {
+        const y = 2 + f * exaggeration; axis.push(new T.Vector3(ax, y, az), new T.Vector3(ax - 8, y, az));
+        const div = document.createElement('div'); div.className = 'bls-model-label bls-axis-label'; div.textContent = `${fmtUm(max * f)} µm`;
+        const tick = new T.Object3D(); tick.position.set(ax - 14, y, az); tick.add(new CSS2DObject(div)); group.add(tick);
+      }
+      group.add(new T.LineSegments(new T.BufferGeometry().setFromPoints(axis), new T.LineBasicMaterial({ color: 0x173748 })));
+    }
     for (const [direction, name, color] of [[new T.Vector3(1,0,0), 'X', 0xb62332], [new T.Vector3(0,0,-1), 'Y', 0x175fa7]] as const) {
       const origin = new T.Vector3(-pose.x, 48, 0); scene.add(new T.ArrowHelper(direction, origin, 90, color, 12, 7));
       const tip=origin.clone().addScaledVector(direction,105); label(name,tip.x,tip.y,tip.z);
@@ -178,6 +208,10 @@ export default function Scene({ p, pose, z, nx, ny, max, log, cabin, transparent
       saved.current = { focus, position: camera.position.clone(), target: controls.target.clone() }; cancelAnimationFrame(id); ro.disconnect(); labelRenderer.domElement.remove();
       scene.traverse(o => { if ((o instanceof T.Mesh || o instanceof T.Line)) { o.geometry.dispose(); const m = o.material; Array.isArray(m) ? m.forEach(x => x.dispose()) : m.dispose(); } });
     };
-  }, [p, pose, z, nx, ny, max, log, cabin, transparent, filter, used, time, duration, playing, focus]);
-  return <div><div className="toolbar">{[['overall', 'Gesamtansicht'], ['head', 'Spritzkopf & Hörner'], ['panel', 'Bedienpult']].map(([v, l]) => <button className={focus === v ? 'active' : ''} key={v} onClick={() => { saved.current = null; setFocus(v); }}>{l}</button>)}</div><div className="bls-scene" ref={host} aria-label="Drehbares Kabinenmodell mit verbundener Aufhängung, Spritze, Luftkappenhörnern und beschrifteten Leuchten" /></div>;
+  }, [p, pose, z, nx, ny, max, log, cabin, transparent, filter, used, time, duration, playing, focus, exaggeration]);
+  const layerName = dry ? 'Trockenschicht' : 'Nassschicht';
+  return <div><div className="toolbar">{[['overall', 'Gesamtansicht'], ['head', 'Spritzkopf & Hörner'], ['panel', 'Bedienpult']].map(([v, l]) => <button className={focus === v ? 'active' : ''} key={v} onClick={() => { saved.current = null; setFocus(v); }}>{l}</button>)}
+      <label className="toggle bls-exaggeration">Überhöhung · Höhe bei Skalenmaximum: {exaggeration === 0 ? 'aus (flach)' : `${exaggeration} mm`}<input type="range" min={0} max={100} step={5} value={exaggeration} aria-label="Darstellungshöhe der Schicht am Skalenmaximum in mm" onChange={e => setExaggeration(Number(e.target.value))} /></label></div>
+    <div className="bls-scene" ref={host} aria-label="Drehbares Kabinenmodell mit verbundener Aufhängung, Spritze, Luftkappenhörnern und beschrifteten Leuchten" />
+    {exaggeration > 0 && max > .01 && <p className="bls-scene-note">{layerName} überhöht: {fmtUm(max)} µm (Skalenmaximum) entsprechen {exaggeration} mm Darstellungshöhe. Die Höhe ist linear in µm, auch bei logarithmischer Farbskala; Farbe und µm-Achse zeigen die Modellwerte. Der Maßstab bleibt über die Zeit konstant, die Schicht wächst also sichtbar mit.</p>}</div>;
 }

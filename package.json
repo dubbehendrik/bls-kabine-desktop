@@ -4,7 +4,7 @@
   "description": "BLS-Kabine Lehrtool: Bahnplanung und Spritzbildprognose (Demo, nur für Lehrzwecke)",
   "author": "Hendrik Dubbe",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.1.1",
   "main": "electron/main.mjs",
   "type": "module",
   "engines": {

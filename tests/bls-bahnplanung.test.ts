@@ -1,5 +1,5 @@
 import {describe,it,expect} from 'vitest';
-import {defaults,brush,kernel,plan,at,consumed,simulate,lamps,massBalance,parseNumber,colorFraction} from '../src/apps/bls-bahnplanung/model';
+import {defaults,brush,kernel,plan,at,consumed,simulate,lamps,massBalance,parseNumber,colorFraction,exaggeratedHeight} from '../src/apps/bls-bahnplanung/model';
 describe('BLS physics and motion',()=>{
 it('normalizes the Gaussian on an unlimited plane',()=>{let sum=0;for(let x=-500;x<500;x+=2)for(let y=-300;y<300;y+=2)sum+=kernel(x,y,defaults)*4;expect(sum).toBeCloseTo(1,5);});
 it('round spray and discrete cap rotation',()=>{const p={...defaults,horn:0};expect(brush(p).sx).toBe(brush(p).sy);expect(kernel(20,5,{...defaults,orientation:0})).toBeCloseTo(kernel(5,20,{...defaults,orientation:90}),10);});
@@ -26,4 +26,5 @@ describe('BLS revised controls and material accounting',()=>{
  it('uses delta Y to increase symmetric row count without changing spacing',()=>{const a=plan({...defaults,deltaY:0}).filter(g=>g.b.phase==='Beschichtungsbahn');const b=plan({...defaults,deltaY:45}).filter(g=>g.b.phase==='Beschichtungsbahn');expect(b.length).toBeGreaterThan(a.length);expect(b[1].b.y-b[0].b.y).toBeCloseTo(defaults.spacing);expect(b[0].b.y).toBeCloseTo(-b.at(-1)!.b.y);});
  it('supports shorter travel with negative X offset',()=>{const p={...defaults,over:-20};expect(Math.abs(plan(p).find(g=>g.b.phase==='Beschichtungsbahn')!.b.x)).toBe(80);});
  it('plans 250 mm square workpieces through both orientations',()=>{const s=plan({...defaults,width:250,height:250,mode:'cross',passes:2});expect(s.every(g=>Number.isFinite(g.duration)&&g.duration>0)).toBe(true);expect(s.some(g=>g.b.angle===Math.PI/2)).toBe(true);});
- });
+ it('exaggerated 3D height is linear, capped and off at zero',()=>{expect(exaggeratedHeight(50,100,40)).toBe(20);expect(exaggeratedHeight(200,100,40)).toBe(40);expect(exaggeratedHeight(-5,100,40)).toBe(0);expect(exaggeratedHeight(50,100,0)).toBe(0);expect(exaggeratedHeight(50,0,40)).toBe(0);expect(exaggeratedHeight(NaN,100,40)).toBe(0);});
+});

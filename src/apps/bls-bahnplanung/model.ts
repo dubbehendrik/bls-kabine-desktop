@@ -83,6 +83,11 @@ export function colorFraction(value: number, max: number, logarithmic: boolean) 
   const f = Math.max(0, Math.min(1, value / Math.max(1e-12, max)));
   return logarithmic ? Math.log1p(999 * f) / Math.log(1000) : f;
 }
+/** Exaggerated 3D display height in mm: always linear in thickness (also with log colors), capped at heightAtMax. */
+export function exaggeratedHeight(value: number, max: number, heightAtMax: number) {
+  if (!(heightAtMax > 0) || !(max > 0) || !Number.isFinite(value)) return 0;
+  return Math.max(0, Math.min(1, value / max)) * heightAtMax;
+}
 export function colorAt(value: number, max: number, logarithmic: boolean) {
   return value <= 1e-9 ? '#dbe3e8' : `hsl(${235 - 235 * colorFraction(value, max, logarithmic)} 83% 48%)`;
 }

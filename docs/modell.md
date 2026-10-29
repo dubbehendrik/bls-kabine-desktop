@@ -25,3 +25,7 @@ Automated tests cover Gaussian normalization, round/elliptical symmetry, orienta
 - Cap has a retaining ring, central nozzle and opposed extruded horns. Horn axis is perpendicular to the fan major axis. Cap, needle, syringe and guide are connected; bridge connects to booth frame. Head and control-desk closeups are available.
 - Shared logarithmic COLOR mapping log(1+999*h/hmax)/log(1000), neutral zero; height, cut curves and µm axis remain linear. Canvas profile follows the HR-ESTA visualization with a movable section plane and direct rotation controls.
 - Browser verified delayed validation (intermediate 1 accepted before blur, then rejected for speed), editing to 100 and recalculation, profile, closeup and labeled panel. Browser has WebGL disabled; SVG fallback and Canvas profile verified. Native GPU appearance still needs user-side checking.
+
+## Desktop 0.1.1 – überhöhte 3D-Schicht
+
+Kabinenansicht: Die Schicht kann wie in der Roboter-Bahnplanung überhöht als geschlossener Körper gezeigt werden. Darstellungshöhe = Schichtdicke / Skalenmaximum × eingestellte Höhe (0–100 mm, Standard 40 mm), linear auch bei logarithmischer Farbskala. Skalenmaximum ist das Maximum des Endzustands, daher bleibt der Maßstab über die Animation konstant. Reine Darstellung, keine Modelländerung. Gitterwerte (Zellmittelpunkte) werden wie bisher auf die Plattenecken gelegt.
