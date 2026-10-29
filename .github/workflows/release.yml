@@ -1,0 +1,82 @@
+name: Windows-Installer
+# Tag vX.Y.Z  -> baut den Installer und veröffentlicht ihn im öffentlichen Repo bls-kabine-downloads.
+# Manuell     -> baut nur einen Testinstaller (Artefakt im Actions-Lauf), nichts wird veröffentlicht.
+on:
+  push:
+    tags: ['v*.*.*']
+  workflow_dispatch:
+permissions:
+  contents: read
+env:
+  DOWNLOAD_REPO: dubbehendrik/bls-kabine-downloads
+  SETUP_NAME: BLS-Kabine-Lehrtool-Setup.exe
+jobs:
+  build:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Version prüfen
+        id: meta
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          if [ "$GITHUB_REF_TYPE" = "tag" ] && [ "$GITHUB_REF_NAME" != "v$VERSION" ]; then
+            echo "::error::Tag $GITHUB_REF_NAME passt nicht zu package.json ($VERSION)."; exit 1
+          fi
+      - name: Install dependencies
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
+      - name: Tests und Installer bauen
+        run: npm run dist
+      - name: Prüfsumme und latest.json
+        run: |
+          cd release
+          SIZE=$(stat -c%s "$SETUP_NAME")
+          SHA=$(sha256sum "$SETUP_NAME" | cut -d' ' -f1)
+          echo "$SHA  $SETUP_NAME" > "$SETUP_NAME.sha256"
+          printf '{\n  "version": "%s",\n  "file": "%s",\n  "size": %s,\n  "sha256": "%s"\n}\n' \
+            "${{ steps.meta.outputs.version }}" "$SETUP_NAME" "$SIZE" "$SHA" > latest.json
+          cat latest.json
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ steps.meta.outputs.version }}
+          path: |
+            release/${{ env.SETUP_NAME }}
+            release/${{ env.SETUP_NAME }}.sha256
+            release/latest.json
+          retention-days: 30
+
+  publish:
+    needs: build
+    if: github.ref_type == 'tag'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: installer-${{ needs.build.outputs.version }}
+          path: out
+      - name: Im öffentlichen Downloads-Repo veröffentlichen
+        env:
+          GH_TOKEN: ${{ secrets.DOWNLOADS_TOKEN }}
+          VERSION: ${{ needs.build.outputs.version }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo "::warning::Secret DOWNLOADS_TOKEN fehlt – Installer liegt nur als Artefakt in diesem Lauf."; exit 0
+          fi
+          if gh release view "v$VERSION" -R "$DOWNLOAD_REPO" >/dev/null 2>&1; then
+            echo "::error::Release v$VERSION existiert bereits. Bestehende Versionen werden nicht überschrieben."; exit 1
+          fi
+          # Abschnitt "## X.Y.Z" aus CHANGELOG.md als Release-Text
+          awk -v v="## $VERSION" '$0==v{f=1;next} /^## /{f=0} f' CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Version $VERSION" > notes.md
+          gh release create "v$VERSION" -R "$DOWNLOAD_REPO" --title "BLS-Kabine Lehrtool $VERSION" --notes-file notes.md \
+            "out/$SETUP_NAME" "out/$SETUP_NAME.sha256" out/latest.json

@@ -1,0 +1,40 @@
+# Windows x64 NSIS installer, per-user, password-protected (build/installer.nsh).
+appId: de.hs-esslingen.bls-kabine-lehrtool
+productName: BLS-Kabine Lehrtool
+copyright: "Hochschule Esslingen – nur für Lehrzwecke"
+directories:
+  output: release
+  buildResources: build
+files:
+  - dist/**/*
+  - electron/*.mjs
+  - electron/*.cjs
+  - "!electron/*.d.mts"
+  - package.json
+asar: true
+npmRebuild: false
+electronLanguages: [de, en-US]
+win:
+  target:
+    - target: nsis
+      arch: [x64]
+  icon: build/icon.ico
+  artifactName: BLS-Kabine-Lehrtool-Setup.${ext}
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: false
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: BLS-Kabine Lehrtool
+  uninstallDisplayName: BLS-Kabine Lehrtool
+  runAfterFinish: true
+  deleteAppDataOnUninstall: false
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  include: build/installer.nsh
+  language: "1031"
+  installerLanguages: [de_DE]
+  multiLanguageInstaller: false
+publish: null

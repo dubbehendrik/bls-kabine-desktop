@@ -1,0 +1,6 @@
+/* Desktop-only header additions; the app styles themselves come unchanged from lehrapps-web. */
+.desktop-header { flex-wrap: wrap; gap: 16px 24px; }
+.desktop-title { font-size: 1.3rem; font-weight: 700; }
+.desktop-version { color: #425d70; font-size: .9rem; }
+.desktop-header button { padding: 6px 14px; font-size: .9rem; }
+.desktop-header button:disabled { opacity: .6; cursor: progress; }
