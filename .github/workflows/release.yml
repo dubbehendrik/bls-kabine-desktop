@@ -19,8 +19,8 @@ jobs:
     outputs:
       version: ${{ steps.meta.outputs.version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 24
       - name: Version prüfen
@@ -35,7 +35,15 @@ jobs:
         run: |
           if [ -f package-lock.json ]; then npm ci; else npm install --no-audit --no-fund; fi
       - name: Tests und Installer bauen
-        run: npm run dist
+        run: |
+          set -o pipefail
+          npm run dist 2>&1 | tee build.log
+      - name: Fehlerausgabe als Hinweis anhängen
+        if: failure()
+        run: |
+          [ -f build.log ] || exit 0
+          msg=$(grep -v -i "npm warn" build.log | tail -n 70 | sed -e 's/%/%25/g' -e 's/\r//g' | awk '{printf "%s%%0A", $0}')
+          echo "::error title=Build-Ausgabe::$msg"
       - name: Prüfsumme und latest.json
         run: |
           cd release
@@ -59,7 +67,7 @@ jobs:
     if: github.ref_type == 'tag'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with:
           name: installer-${{ needs.build.outputs.version }}
