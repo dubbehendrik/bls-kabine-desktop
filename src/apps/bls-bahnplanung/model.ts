@@ -1,19 +1,35 @@
+import { shapeExtent, shapeKernel, type Shape } from './brush';
 export type Params = {
   mode: string; q: number; atom: number; horn: number; distance: number; orientation: number;
   solids: number; density: number; viscosity: number; material: string;
   speed: number; spacing: number; over: number; passes: number; flash: number; spot: number;
   width: number; height: number; deltaY: number; nozzle: number;
+  nozzleType: string; tension: number;
+  // Brush source and Beta-brush parameters (designer / experiment)
+  source: BrushSource; ba: number; bb: number; bm: number; bk: number; bn: number; bl: number; bg: number; awg: number;
 };
+export type BrushSource = 'model' | 'designer' | 'experiment';
+export const nozzleTypes = [['rp', 'RP (reduzierter Druck)'], ['hvlp', 'HVLP'], ['conventional', 'Konventionell (Hochdruck)'], ['other', 'Sonstige']];
 export const materials = [
-  { id: '2k-solvent', name: '2K-Lösemittellack · Beispiel', density: 1.2, viscosity: 100, solids: 50 },
-  { id: '1k-water', name: '1K-Wasserbasislack · Beispiel', density: 1.1, viscosity: 150, solids: 35 },
-  { id: '2k-water', name: '2K-Wasserlack · Beispiel', density: 1.2, viscosity: 180, solids: 45 },
+  { id: '2k-solvent', name: '2K-Lösemittellack · Beispiel', density: 1.2, viscosity: 100, solids: 50, tension: 28 },
+  { id: '1k-water', name: '1K-Wasserbasislack · Beispiel', density: 1.1, viscosity: 150, solids: 35, tension: 38 },
+  { id: '2k-water', name: '2K-Wasserlack · Beispiel', density: 1.2, viscosity: 180, solids: 45, tension: 36 },
 ];
 export const defaults: Params = {
   mode: 'meander', q: 80, atom: 2, horn: 1.5, distance: 150, orientation: 90,
   solids: 50, density: 1.2, viscosity: 100, material: '2k-solvent',
   speed: 200, spacing: 30, over: 60, passes: 1, flash: 0, spot: 1, width: 200, height: 100, deltaY: 0, nozzle: 1.5,
+  nozzleType: 'rp', tension: 28,
+  source: 'model', ba: 90, bb: 30, bm: 6, bk: .8, bn: 2, bl: 1.5, bg: 0, awg: 70,
 };
+export const shapeOf = (p: Params): Shape => ({ a: p.ba, b: p.bb, m: p.bm, k: p.bk, n: p.bn, l: p.bl, g: p.bg });
+/** Deposition efficiency: fixed 0.7 in the Gaussian teaching model, AWG of the Beta brush otherwise. */
+export const efficiency = (p: Params) => p.source === 'model' ? .7 : p.awg / 100;
+/** Half axes of the drawn spray outline in mm: k·σ for the Gaussian model, outer edge for the Beta brush. */
+export function outline(p: Params, k = 2) {
+  if (p.source === 'model') { const b = brush(p); return { ru: k * b.sx, rv: k * b.sy }; }
+  return shapeExtent(shapeOf(p));
+}
 export type Pose = { x: number; y: number; angle: number; phase: string; on: boolean };
 export type Segment = { a: Pose; b: Pose; start: number; duration: number };
 export type Lamp = { label: string; color: 'green' | 'white'; state: 'off' | 'on' | 'blink' };
@@ -31,8 +47,10 @@ export function brush(p: Params) {
   return { sx: base * (1 + 1.2 * p.horn), sy: base / (1 + .16 * p.horn) };
 }
 export function kernel(x: number, y: number, p: Params) {
-  const { sx, sy } = brush(p), a = p.orientation * Math.PI / 180;
+  const a = p.orientation * Math.PI / 180;
   const u = x * Math.cos(a) + y * Math.sin(a), v = -x * Math.sin(a) + y * Math.cos(a);
+  if (p.source !== 'model') return shapeKernel(u, v, shapeOf(p));
+  const { sx, sy } = brush(p);
   return Math.exp(-.5 * ((u / sx) ** 2 + (v / sy) ** 2)) / (2 * Math.PI * sx * sy);
 }
 export function plan(p: Params) {
@@ -99,7 +117,7 @@ export function parseNumber(text: string, min: number, max: number): number | nu
 export function simulate(p: Params) {
   const segments = plan(p), duration = segments.reduce((v, s) => v + s.duration, 0);
   const nx = 51, ny = 39, dx = p.width / nx, dy = p.height / ny;
-  let used = 0, steps = 0;
+  let used = 0, steps = 0; const eta = efficiency(p);
   const z = new Float32Array(nx * ny);
   const frames = [{ time: 0, z: z.slice(), used: 0 }];
   for (const g of segments) {
@@ -112,7 +130,7 @@ export function simulate(p: Params) {
         const c = Math.cos(pose.angle), s = Math.sin(pose.angle);
         for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
           const u = -p.width / 2 + (i + .5) * dx, v = -p.height / 2 + (j + .5) * dy;
-          z[j * nx + i] += vol * 1e6 * .7 * kernel(c * u - s * v - pose.x, s * u + c * v - pose.y, p);
+          z[j * nx + i] += vol * 1e6 * eta * kernel(c * u - s * v - pose.x, s * u + c * v - pose.y, p);
         }
       }
       if (++steps % 10 === 0) frames.push({ time: t + dt / 2, z: z.slice(), used });
