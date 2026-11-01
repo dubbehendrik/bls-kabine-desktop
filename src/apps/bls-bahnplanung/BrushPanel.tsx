@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { fwhm, presets, projectionU, projectionsV, rateFactor, shapeExtent, shapeKernel, type Shape } from './brush';
 import { fitSpot, fitTracks, trackProfile, type FitResult, type Point, type SpotData, type TrackData } from './fit';
 import { brushMeta, readMeasurementFile } from './measurement';
-import { colorAt, kernel, shapeOf, type BrushSource, type Params } from './model';
+import { colorAt, efficiency, kernel, outline, shapeOf, type BrushSource, type Params } from './model';
 import ProfileView from './ProfileView';
 import type { FitRequest } from './fitWorker';
 
@@ -69,14 +69,28 @@ function Chart({ series, dots = [], xLabel, yLabel, label }: { series: { x: numb
   </svg><figcaption className="bls-chart-legend">{series.map(s => <span key={s.name}><i style={{ background: s.color }} />{s.name}</span>)}{dots.length > 0 && <span><i className="dot" />Messung (gemittelt)</span>}</figcaption></figure>;
 }
 
-function Heat({ nx, ny, values, max, w, h, label }: { nx: number; ny: number; values: Float32Array; max: number; w: number; h: number; label: string }) {
+type Annot = { across: boolean; orientation: number; plate: { w: number; h: number; label: string } };
+function Heat({ nx, ny, values, max, w, h, label, annot }: { nx: number; ny: number; values: Float32Array; max: number; w: number; h: number; label: string; annot?: Annot }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const el = ref.current; if (!el) return; const W = 640, H = Math.round(W * h / w); el.width = W; el.height = H;
     const ctx = el.getContext('2d')!; ctx.fillStyle = '#f4f7fa'; ctx.fillRect(0, 0, W, H);
     for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) { const v = values[j * nx + i]; if (v > .03 * max) { ctx.fillStyle = colorAt(v, max, false); ctx.fillRect(i * W / nx, H - (j + 1) * H / ny, W / nx + .6, H / ny + .6); } }
     ctx.strokeStyle = '#173748'; ctx.lineWidth = 2; ctx.strokeRect(1, 1, W - 2, H - 2);
-  }, [nx, ny, values, max, w, h]);
+    if (annot) {
+      const k = W / w, pw = annot.plate.w * k, ph = annot.plate.h * k, ink = '#17628e';
+      ctx.setLineDash([8, 5]); ctx.strokeStyle = '#40576a'; ctx.lineWidth = 2; ctx.strokeRect((W - pw) / 2, (H - ph) / 2, pw, ph); ctx.setLineDash([]);
+      const tag = (text: string, x: number, y: number, color = '#163349', align: CanvasTextAlign = 'left') => { ctx.font = '600 15px system-ui'; ctx.textAlign = align; const tw = ctx.measureText(text).width, x0 = align === 'center' ? x - tw / 2 : align === 'right' ? x - tw : x; ctx.fillStyle = 'rgba(255,255,255,.88)'; ctx.fillRect(x0 - 4, y - 15, tw + 8, 21); ctx.fillStyle = color; ctx.fillText(text, x, y); ctx.textAlign = 'left'; };
+      tag(annot.plate.label, Math.max(8, (W - pw) / 2 + 6), Math.max(22, (H - ph) / 2 + 22), '#40576a');
+      const arrow = (x1: number, y1: number, x2: number, y2: number) => { const a = Math.atan2(y2 - y1, x2 - x1); ctx.strokeStyle = ink; ctx.fillStyle = ink; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x1, y1); ctx.lineTo(x2, y2); ctx.stroke(); ctx.beginPath(); ctx.moveTo(x2, y2); ctx.lineTo(x2 - 16 * Math.cos(a - .45), y2 - 16 * Math.sin(a - .45)); ctx.lineTo(x2 - 16 * Math.cos(a + .45), y2 - 16 * Math.sin(a + .45)); ctx.closePath(); ctx.fill(); };
+      if (annot.across) { arrow(26, H * .78, 26, H * .22); tag('Fahrt X', 40, H * .22 + 6, ink); }
+      else { arrow(W * .25, H - 24, W * .75, H - 24); tag('Fahrt X', W * .75 + 20, H - 18, ink); }
+      const cx = W - 40, cy = 44; ctx.fillStyle = '#fff'; ctx.strokeStyle = '#40576a'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(cx, cy, 15, 0, 2 * Math.PI); ctx.fill(); ctx.stroke();
+      ctx.fillStyle = '#40576a'; ctx.beginPath(); ctx.arc(cx, cy, 4, 0, 2 * Math.PI); ctx.fill(); ctx.fillRect(cx - 7, cy - 30, 14, 9); ctx.fillRect(cx - 7, cy + 21, 14, 9);
+      tag(`Luftkappe ${annot.orientation}°`, cx - 26, cy + 5, '#163349', 'right');
+      tag(annot.across ? 'Strahl quer zur Fahrt' : 'Strahl längs zur Fahrt', W / 2, H - (annot.across ? 18 : 52), '#087344', 'center');
+    }
+  }, [nx, ny, values, max, w, h, annot]);
   return <canvas ref={ref} className="bls-heat" role="img" aria-label={label} />;
 }
 
@@ -85,7 +99,7 @@ const spotOf = (s: Slot): SpotData => ({ time: s.time, q: s.q, solids: s.solids,
 const condFactor = (s: { q: number; solids: number; dry: boolean }, awg: number) => rateFactor(s.q, awg / 100, s.dry ? s.solids / 100 : 1);
 
 export default function BrushPanel({ draft, update, exp, setExp }: { draft: Params; update: (patch: Partial<Params>) => void; exp: Experiment; setExp: (f: (e: Experiment) => Experiment) => void }) {
-  const [dim, setDim] = useState<'2d' | '3d'>('2d'), [spotTime, setSpotTime] = useState(1), [whole, setWhole] = useState(false);
+  const [dim, setDim] = useState<'2d' | '3d'>('2d'), [spotTime, setSpotTime] = useState(1);
   const shape = shapeOf(draft), custom = draft.source !== 'model';
   const roles: Role[] = exp.kind === 'tracks' ? ['A', 'B'] : ['spot'];
   const load = async (role: Role, file: File) => {
@@ -116,15 +130,18 @@ export default function BrushPanel({ draft, update, exp, setExp }: { draft: Para
     } catch { setTimeout(() => { try { done({ ok: true, result: request.kind === 'tracks' ? fitTracks(request.A, request.B) : fitSpot(request.S) }); } catch (error) { done({ ok: false, error: String(error) }); } }, 30); }
   };
 
-  // Preview: stationary dry layer after spotTime on the program sheet (Gauss model or Beta brush), sheet-centred, cap orientation applied.
+  // Preview in the nozzle frame: long fan axis always horizontal, whole spray image shown. The program sheet is drawn
+  // dashed in this frame (sheet X = travel direction), so the cap setting shows up as travel arrow, not as a rotated image.
   const preview = useMemo(() => {
-    const e = shapeExtent(shapeOf(draft)), o = draft.orientation === 0;
-    const W = whole && custom ? Math.max(draft.width, 2.2 * (o ? e.ru : e.rv)) : draft.width, H = whole && custom ? Math.max(draft.height, 2.2 * (o ? e.rv : e.ru)) : draft.height;
-    const nx = 100, ny = Math.max(10, Math.round(nx * H / W)), dx = W / nx, dy = H / ny;
-    const F = rateFactor(draft.q, custom ? draft.awg / 100 : .7, draft.solids / 100) * spotTime, z = new Float32Array(nx * ny);
-    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) z[j * nx + i] = F * kernel(-W / 2 + (i + .5) * dx, -H / 2 + (j + .5) * dy, draft);
-    return { nx, ny, dx, dy, z, max: Math.max(1e-6, ...z), W, H };
-  }, [draft, spotTime, custom, whole]);
+    const e = outline(draft, 2.5), across = draft.orientation !== 0;
+    const plate = across ? { w: draft.height, h: draft.width } : { w: draft.width, h: draft.height };
+    const W = Math.max(2.3 * e.ru, plate.w * 1.12), H = Math.max(2.3 * e.rv, plate.h * 1.12, W * .35);
+    const nx = 120, ny = Math.max(12, Math.round(nx * H / W)), dx = W / nx, dy = H / ny, frame = { ...draft, orientation: 0 };
+    const F = rateFactor(draft.q, efficiency(draft), draft.solids / 100) * spotTime, z = new Float32Array(nx * ny);
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) z[j * nx + i] = F * kernel(-W / 2 + (i + .5) * dx, -H / 2 + (j + .5) * dy, frame);
+    const annot: Annot = { across, orientation: draft.orientation, plate: { ...plate, label: `Programmblech ${draft.width} × ${draft.height} mm` } };
+    return { nx, ny, dx, dy, z, max: Math.max(1e-6, ...z), W, H, annot };
+  }, [draft, spotTime]);
   const ext = shapeExtent(shape), sb50 = fwhm(u => projectionU(u, shape), ext.ru * 1.05), sb50b = fwhm(v => projectionsV([v], shape)[0], ext.rv * 1.05);
 
   // Track profiles: at measurement conditions (with points) after a fit, otherwise at the program settings.
@@ -194,10 +211,10 @@ export default function BrushPanel({ draft, update, exp, setExp }: { draft: Para
 
     <section className="bls-section"><h3>Vorschau</h3>
       <div className="toolbar"><button className={dim === '2d' ? 'active' : ''} onClick={() => setDim('2d')}>Standbild 2D</button><button className={dim === '3d' ? 'active' : ''} onClick={() => setDim('3d')}>Standbild 3D</button>
-        <label className="toggle">Spritzdauer Standbild<input type="range" min="0.1" max="5" step="0.1" value={spotTime} onChange={e => setSpotTime(Number(e.target.value))} /><output>{fmt(spotTime)} s</output></label>{custom && <label className="toggle"><input type="checkbox" checked={whole} onChange={e => setWhole(e.target.checked)} />Ganzes Spritzbild zeigen</label>}</div>
-      {dim === '2d' ? <Heat nx={preview.nx} ny={preview.ny} values={preview.z} max={preview.max} w={preview.W} h={preview.H} label="Stationäres Spritzbild als Trockenschicht auf dem Programmblech" />
+        <label className="toggle">Spritzdauer Standbild<input type="range" min="0.1" max="5" step="0.1" value={spotTime} onChange={e => setSpotTime(Number(e.target.value))} /><output>{fmt(spotTime)} s</output></label></div>
+      {dim === '2d' ? <Heat nx={preview.nx} ny={preview.ny} values={preview.z} max={preview.max} w={preview.W} h={preview.H} annot={preview.annot} label={`Stationäres Spritzbild, lange Strahlachse waagerecht, ${preview.annot.across ? 'Fahrt X senkrecht: Strahl quer zur Fahrt' : 'Fahrt X waagerecht: Strahl längs zur Fahrt'}`} />
         : <ProfileView p={{ ...draft, width: preview.W, height: preview.H }} r={preview} z={preview.z} max={preview.max} log={false} axis="x" fraction={.5} showCut={false} dry />}
-      <p className="small">Trockenschicht nach {fmt(spotTime)} s auf {preview.W > draft.width || preview.H > draft.height ? 'vergrößerter Vorschaufläche' : 'dem Programmblech'} {fmt(preview.W, 0)} × {fmt(preview.H, 0)} mm, Luftkappe {draft.orientation}° · Maximum {fmt(preview.max)} µm · V̇ {draft.q} ml/min · Festkörper {draft.solids} %{custom ? ` · AWG ${draft.awg} %` : ' · η 70 % (Lehrmodell)'}.</p>
+      <p className="small">Ansicht im Düsensystem: lange Strahlachse immer waagerecht, ganzes Spritzbild ({fmt(preview.W, 0)} × {fmt(preview.H, 0)} mm Fläche). Luftkappe {draft.orientation}° → {preview.annot.across ? 'Strahl quer zur Fahrt, die Fahrt (Blech-X) verläuft senkrecht' : 'Strahl längs zur Fahrt, die Fahrt (Blech-X) verläuft waagerecht'}; gestrichelt das Programmblech {draft.width} × {draft.height} mm in dieser Lage. Trockenschicht nach {fmt(spotTime)} s · Maximum {fmt(preview.max)} µm · V̇ {draft.q} ml/min · Festkörper {draft.solids} %{custom ? ` · AWG ${draft.awg} %` : ' · η 70 % (Lehrmodell)'}.</p>
       {custom && <>
         <div className="bls-stats"><div><strong>{fmt(sb50, 0)} mm</strong><span>SB50 · Bahn A (Strahl quer)</span></div><div><strong>{fmt(sb50b, 0)} mm</strong><span>SB50 · Bahn B (Strahl längs)</span></div><div><strong>{fmt(2 * ext.ru, 0)} × {fmt(2 * ext.rv, 0)} mm</strong><span>Spritzbild außen</span></div></div>
         <div className="bls-charts">{tracks.map(t => <div key={t.role}><h4>Einzelbahn {t.role} · {t.role === 'A' ? 'Profil lange Achse' : 'Profil kurze Achse'}</h4>

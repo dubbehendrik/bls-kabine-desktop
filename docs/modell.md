@@ -44,3 +44,7 @@ Vorwärtskette für den Fit: Standbild h = F·t·K; Einzelbahn A (Strahl quer zu
 Messablauf (Annahme 200 × 100-Blech): Fahrt quer zur 200er-Seite, Profil entlang der 200er-Seite, mehrere Messlinien werden gemittelt. Blech B identisch, Luftkappe 90° gedreht. Die Kappenstellung relativ zur Fahrt ist Pflichtangabe (Rolle A/B); ein Winkelfehler ε verbreitert Profil B um etwa a·sin ε und ist aus B allein nicht von b zu trennen. Überlauf je Seite mindestens halbe Strahlausdehnung in Fahrtrichtung plus Beschleunigungsweg.
 
 Import: .xlsx ohne Zusatzbibliothek (ZIP + DecompressionStream), Spalten „Blech X / Blech Y / Schichtdicke / Status“, nur gültige Punkte, Runs gemittelt. Fit läuft in einem Web Worker. Synthetische Testdateien in tests/fixtures (Wahrheit a 85, b 28, m 5, k 0,9, n 2,2, l 1,6, γ 0,4, AWG 62 %) werden in den Tests wiedergefunden.
+
+## Desktop 0.2.1 – Vorschau im Düsensystem
+
+Die Brush-Vorschau zeigt das Standbild immer mit waagerechter langer Strahlachse und vollständig. Die Luftkappenstellung bestimmt nur noch die eingezeichnete Fahrtrichtung (90° → Fahrt senkrecht, Strahl quer zur Fahrt; 0° → Fahrt waagerecht, Strahl längs). Das Programmblech wird gestrichelt in dieser Lage gezeigt (Blech-X entlang der Fahrt). Reine Darstellung, Simulation unverändert.

@@ -1,5 +1,10 @@
 # Änderungen
 
+## 0.2.1
+
+- Brush-Vorschau im Düsensystem: lange Strahlachse immer waagerecht, ganzes Spritzbild sichtbar (auch beim Tauschen der Blechmaße und bei der Modellschätzung).
+- Fahrtrichtung (Pfeil „Fahrt X“), Luftkappenstellung mit Hörnern und Hinweis „Strahl quer/längs zur Fahrt“ werden eingezeichnet; das Programmblech erscheint gestrichelt in dieser Lage.
+
 ## 0.2.0
 
 - Eingaben neu sortiert: 01 Werkstück & Programm (mit Luftkappe zur Fahrt), 02 Anlage & Rüstung (Düsentyp neu, Düse, Abstand, Drücke, Lackmenge), 03 Lackmaterial (Oberflächenspannung neu), 04 Brush.
