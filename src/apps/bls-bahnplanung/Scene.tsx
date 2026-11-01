@@ -3,7 +3,7 @@ import * as T from 'three';
 import { SVGRenderer } from 'three/examples/jsm/renderers/SVGRenderer.js';
 import { CSS2DObject, CSS2DRenderer } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
-import { brush, colorFraction, exaggeratedHeight, lamps, pistonTravel, type Params, type Pose } from './model';
+import { outline, colorFraction, exaggeratedHeight, lamps, pistonTravel, type Params, type Pose } from './model';
 const fmtUm = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: n < 10 ? 1 : 0 });
 export default function Scene({ p, pose, z, nx, ny, max, log, cabin, transparent, filter, used, time, duration, playing, dry = true, axis = 'x', fraction = .5, showCut = false }: {
   p: Params; pose: Pose; z: Float32Array; nx: number; ny: number; max: number; log: boolean; dry?: boolean; axis?: 'x' | 'y'; fraction?: number; showCut?: boolean;
@@ -143,9 +143,9 @@ export default function Scene({ p, pose, z, nx, ny, max, log, cabin, transparent
     }
     if (focus === 'head') { label(`Flachstrahl ${p.orientation}° · Hörner quer zur langen Strahlachse`, 0, outlet - 35, (-pose.y)); }
     if (pose.on && used < 100) {
-      const b = brush(p), spray = new T.Mesh(new T.ConeGeometry(1, p.distance, 36, 1, true), new T.MeshBasicMaterial({ color: 0x2ad89d, transparent: true, opacity: .28, side: T.DoubleSide, depthWrite: false }));
-      spray.scale.set(b.sx * 2.5, 1, b.sy * 2.5); spray.rotation.y = p.orientation * Math.PI / 180; spray.position.set(0, outlet - 12 - p.distance / 2, (-pose.y)); scene.add(spray);
-      const points = Array.from({length: 81}, (_, i) => { const a=i/80*Math.PI*2, u=b.sx*2.5*Math.cos(a), v=b.sy*2.5*Math.sin(a), t=p.orientation*Math.PI/180; return new T.Vector3(u*Math.cos(t)-v*Math.sin(t), 43, (-pose.y)-u*Math.sin(t)-v*Math.cos(t)); });
+      const b = outline(p, 2.5), spray = new T.Mesh(new T.ConeGeometry(1, p.distance, 36, 1, true), new T.MeshBasicMaterial({ color: 0x2ad89d, transparent: true, opacity: .28, side: T.DoubleSide, depthWrite: false }));
+      spray.scale.set(b.ru, 1, b.rv); spray.rotation.y = p.orientation * Math.PI / 180; spray.position.set(0, outlet - 12 - p.distance / 2, (-pose.y)); scene.add(spray);
+      const points = Array.from({length: 81}, (_, i) => { const a=i/80*Math.PI*2, u=b.ru*Math.cos(a), v=b.rv*Math.sin(a), t=p.orientation*Math.PI/180; return new T.Vector3(u*Math.cos(t)-v*Math.sin(t), 43, (-pose.y)-u*Math.sin(t)-v*Math.cos(t)); });
       const footprint = new T.Line(new T.BufferGeometry().setFromPoints(points), new T.LineBasicMaterial({ color: 0x008b58, depthTest: false, depthWrite: false }));
       footprint.renderOrder = 20; scene.add(footprint); // stays visible above an exaggerated layer
     }

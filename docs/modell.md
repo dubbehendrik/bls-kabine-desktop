@@ -33,3 +33,14 @@ Kabinenansicht: Die Schicht kann wie in der Roboter-Bahnplanung überhöht als g
 ## Desktop 0.1.2 – Schnittebene in der Kabinenansicht
 
 Die Schnittebene nutzt dieselbe Gitterzeile bzw. -spalte wie `cutValues()` und die 2D-Ansichten und ist blechfest (dreht beim Kreuzgang mit). Die Profilkurve liegt auf den Stützpunkten der überhöhten Schicht; bei Überhöhung 0 wird nur die Ebenenlage gezeigt.
+
+## Desktop 0.2.0 – Brush-Designer und Brush aus Experiment
+
+Brush-Quelle wählbar: Gaußkern (Lehrmodell, η = 0,7), Designer oder Experiment. Beta-Brush im Düsensystem (u lange Achse, v kurze Achse):
+R(u,v) = (1 + γt²)(1 − |t|^m)^k (1 − |w|^n)^l mit t = u/a, w = v/b(t), b(t) = b(1 + 0,35γt²); numerisch auf ∫∫K = 1 normiert (1/mm²). Höhe aus V̇ · Volumenfestkörper · AWG (AWG ersetzt η). Die Luftkappe dreht den Brush wie bisher um 0°/90°; Abstand und Drücke wirken beim Beta-Brush nicht auf die Form (nur Dokumentation).
+
+Vorwärtskette für den Fit: Standbild h = F·t·K; Einzelbahn A (Strahl quer zur Fahrt) h = F/v · ∫K dv; Einzelbahn B (Strahl längs) h = F/v · ∫K du; F = 1000·AWG·φ·V̇ (µm, V̇ in mm³/s; φ = Festkörper bei Trockenschicht, sonst 1). A bestimmt a, m, k, γ (b, n, l kürzen sich heraus), B bestimmt b, n, l. Gemeinsamer Fit mit getrennter Bahnmitte je Blech; Standbild mit Mitte und Drehung. Nelder-Mead auf logit-begrenzten Parametern mit Neustarts, Standardabweichungen aus der Jacobi-Matrix (lineare Näherung). Plausibilität: AWG aus der Fläche unter A und B muss übereinstimmen (Abweichung > 15 % → Hinweis).
+
+Messablauf (Annahme 200 × 100-Blech): Fahrt quer zur 200er-Seite, Profil entlang der 200er-Seite, mehrere Messlinien werden gemittelt. Blech B identisch, Luftkappe 90° gedreht. Die Kappenstellung relativ zur Fahrt ist Pflichtangabe (Rolle A/B); ein Winkelfehler ε verbreitert Profil B um etwa a·sin ε und ist aus B allein nicht von b zu trennen. Überlauf je Seite mindestens halbe Strahlausdehnung in Fahrtrichtung plus Beschleunigungsweg.
+
+Import: .xlsx ohne Zusatzbibliothek (ZIP + DecompressionStream), Spalten „Blech X / Blech Y / Schichtdicke / Status“, nur gültige Punkte, Runs gemittelt. Fit läuft in einem Web Worker. Synthetische Testdateien in tests/fixtures (Wahrheit a 85, b 28, m 5, k 0,9, n 2,2, l 1,6, γ 0,4, AWG 62 %) werden in den Tests wiedergefunden.

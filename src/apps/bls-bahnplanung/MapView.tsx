@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { brush, colorAt, type Params, type Pose, type Result } from './model';
+import { outline, colorAt, type Params, type Pose, type Result } from './model';
 export default function MapView({ p, pose, z, max, log, r, axis, fraction, showCut }: {
   p: Params; pose: Pose; z: Float32Array; max: number; log: boolean; r: Result; axis: 'x' | 'y'; fraction: number; showCut: boolean;
 }) {
@@ -33,8 +33,8 @@ export default function MapView({ p, pose, z, max, log, r, axis, fraction, showC
     ctx.restore();
     // Nozzle position is expressed in the machine frame, cap orientation independent of sheet rotation.
     ctx.save(); ctx.translate(500 + pose.x * scale, 320 - pose.y * scale); ctx.rotate((-p.orientation) * Math.PI / 180);
-    const b = brush(p); ctx.strokeStyle = pose.on ? '#007b45' : '#687e8d'; ctx.lineWidth = 3; ctx.setLineDash(pose.on ? [] : [5, 4]);
-    ctx.beginPath(); ctx.ellipse(0, 0, b.sx * 2 * scale, b.sy * 2 * scale, 0, 0, Math.PI * 2); ctx.stroke();
+    const b = outline(p); ctx.strokeStyle = pose.on ? '#007b45' : '#687e8d'; ctx.lineWidth = 3; ctx.setLineDash(pose.on ? [] : [5, 4]);
+    ctx.beginPath(); ctx.ellipse(0, 0, b.ru * scale, b.rv * scale, 0, 0, Math.PI * 2); ctx.stroke();
     ctx.beginPath(); ctx.arc(0, 0, 4, 0, Math.PI * 2); ctx.fillStyle = ctx.strokeStyle; ctx.fill(); ctx.restore();
     const origin = projectMachine(0, 0);
     const arrow = (x: number, y: number, label: string) => {
@@ -69,7 +69,7 @@ export default function MapView({ p, pose, z, max, log, r, axis, fraction, showC
     }
     ctx.font = '17px system-ui'; ctx.fillText('0', origin.x - 20, origin.y + 22);
     ctx.font = '18px system-ui'; ctx.fillStyle = '#24485d'; ctx.fillText('Bedienersicht · X rechts / Y nach hinten · Ursprung Bauteilmitte', 24, 30);
-    ctx.fillText('Spritzbildkontur: 2σ · Bahn durchgezogen / Versatz gestrichelt', 24, 610);
+    ctx.fillText((p.source === 'model' ? 'Spritzbildkontur: 2σ' : 'Spritzbildkontur: Brush-Rand') + ' · Bahn durchgezogen / Versatz gestrichelt', 24, 610);
   }, [p, pose, z, max, log, r, axis, fraction, showCut]);
   return <canvas className="bls-map" ref={canvas} role="img" aria-label="Bedienersicht mit maschinenfesten x- und y-Achsen im Bauteilmittelpunkt und bemaßten Bahnparametern" />;
 }

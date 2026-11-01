@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from 'react';
-import { colorAt, type Params, type Result } from './model';
+import { colorAt, type Params } from './model';
+export type Grid = { nx: number; ny: number; dx: number; dy: number };
 export type Axis = 'x' | 'y';
-export function cutValues(r: Result, z: Float32Array, axis: Axis, fraction: number) {
+export function cutValues(r: Grid, z: Float32Array, axis: Axis, fraction: number) {
   const n = axis === 'x' ? r.ny : r.nx, index = Math.max(0, Math.min(n - 1, Math.round(fraction * (n - 1))));
   return axis === 'x' ? Array.from({ length: r.nx }, (_, i) => z[index * r.nx + i]) : Array.from({ length: r.ny }, (_, j) => z[j * r.nx + index]);
 }
 const fmt = (n: number) => n.toLocaleString('de-DE', { maximumFractionDigits: 1 });
 export default function ProfileView({ p, r, z, max, log, axis, fraction, showCut, dry }: {
-  p: Params; r: Result; z: Float32Array; max: number; log: boolean; axis: Axis; fraction: number; showCut: boolean; dry: boolean;
+  p: Params; r: Grid; z: Float32Array; max: number; log: boolean; axis: Axis; fraction: number; showCut: boolean; dry: boolean;
 }) {
   const canvas = useRef<HTMLCanvasElement>(null), host = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState(700), [yaw, setYaw] = useState(-35), [pitch, setPitch] = useState(55), [zoom, setZoom] = useState(1);
